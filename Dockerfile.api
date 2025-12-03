@@ -1,0 +1,37 @@
+# Dockerfile.api
+FROM python:3.12-slim
+
+# 1. OSパッケージ（psycopg2 などに必要なもの）
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2. 作業ディレクトリ
+WORKDIR /app
+
+# 3. 依存関係だけ先にコピーしてインストール
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 4. アプリ本体をコピー
+COPY app ./app
+
+# 5. 環境変数
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
+# 6. 起動コマンド（dev/prodでcompose側から上書きしてもOK）
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# main:app ＝ 「main.py の中の app というオブジェクト」
+
+# Uvicorn は「ASGIサーバ」として app を起動して
+# HTTPリクエストを受け取ったら app に渡す
+# つまり、
+# Uvicorn がポート8000で待ち構える
+# リクエストが来ると Uvicorn → app に渡す
+# app の中のルーティング情報を見て
+# 「GET /items だからこの関数だな」
+# とハンドラ関数（list_items など）を呼び出す
+# 関数の戻り値を JSON に変換してレスポンスにする
+# という流れです。

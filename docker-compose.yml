@@ -1,0 +1,61 @@
+version: "3.9"
+
+# services:
+#   db:
+#     image: postgres:16
+#     container_name: weather-db
+#     environment:
+#       POSTGRES_USER: ${DB_USER}
+#       POSTGRES_PASSWORD: ${DB_PASSWORD}
+#       POSTGRES_DB: ${DB_NAME}
+#     volumes:
+#       - db-data:/var/lib/postgresql/data
+#     ports:
+#       - "5432:5432"     # 本番ではローカルだけに公開したいなら消す
+#     restart: unless-stopped
+
+services:
+  db:
+    image: postgres:16
+    container_name: weather-db
+    environment:
+      POSTGRES_USER: weather
+      POSTGRES_PASSWORD: weatherpass   # ← 空じゃない値を入れる
+      POSTGRES_DB: weatherdb
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: weather-api
+    # DBのenvは今は使ってないのでそのままでOK
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app
+    working_dir: /app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+
+
+  # 将来Ingestを足したいとき用（最初はコメントアウトでもOK）
+  # ingest:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.ingest
+  #   container_name: weather-ingest
+  #   env_file:
+  #     - .env.dev
+  #   depends_on:
+  #     - db
+  #   command: ["python", "-m", "app.ingest.run_ingest"]
+
+volumes:
+  db-data:

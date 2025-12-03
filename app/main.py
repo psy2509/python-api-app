@@ -1,83 +1,75 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+# app/main.py
 
-# Pydantic モデルの定義
-# リクエストボディのスキーマを定義します
-class TodoCreate(BaseModel):
-    """TODOアイテム作成時のリクエストボディのスキーマ"""
-    title: str
-    done: bool = False
+from typing import List
 
-# レスポンスや内部データ構造のスキーマを定義します
-class TodoItem(TodoCreate):
-    """TODOアイテムの完全なスキーマ（IDを含む）"""
-    id: int
+from fastapi import FastAPI, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
-# FastAPI アプリケーションのインスタンス
-app = FastAPI(
-    title="Simple Todo API",
-    description="FastAPIを使って実装したシンプルなTODOと挨拶のAPI"
-)
+from core.db import Base, engine, SessionLocal
+from models.item import Item
+from schemas.item import ItemCreate, ItemRead
 
-# インメモリデータベースの代わりとなるデータストアとIDカウンター
-# 実際の本番環境ではデータベース（PostgreSQL, MongoDBなど）を使用します
-todos: Dict[int, TodoItem] = {}
-next_id = 1
 
-# ----------------------------------------------------
-# 1. ヘルスチェック API
-# ----------------------------------------------------
-@app.get("/health", summary="ヘルスチェック", response_model=Dict[str, str])
-def health_check():
-    """
-    アプリケーションが正常に動作しているかを確認するためのエンドポイントです。
-    """
-    return {"status": "ok"}
+Base.metadata.create_all(bind=engine)
 
-# ----------------------------------------------------
-# 2. 挨拶 API
-# ----------------------------------------------------
-@app.get("/greet", summary="挨拶", response_model=Dict[str, str])
-def greet(name: Optional[str] = None):
-    """
-    名前を渡すと挨拶を返します。
-    名前が指定されない場合は、匿名への挨拶を返します。
-    """
-    if name:
-        message = f"Hello, {name}!"
-    else:
-        message = "Hello, anonymous!"
-        
-    return {"message": message}
+app = FastAPI()
 
-# ----------------------------------------------------
-# 3. TODO 作成 API
-# ----------------------------------------------------
-@app.post("/todos", summary="TODOアイテムを作成", response_model=TodoItem, status_code=201)
-def create_todo(todo: TodoCreate):
-    """
-    新しいTODOアイテムを作成します。
-    """
-    global next_id
-    
-    # 新しいTODOアイテムを作成し、IDを割り当てる
-    new_todo = TodoItem(id=next_id, title=todo.title, done=todo.done)
-    
-    # データストアに保存
-    todos[next_todo.id] = new_todo
-    
-    # 次のIDをインクリメント
-    next_id += 1
-    
-    return new_todo
 
-# ----------------------------------------------------
-# その他：全TODOリストを取得するAPI (利便性のために追加)
-# ----------------------------------------------------
-@app.get("/todos", summary="全TODOアイテムを取得", response_model=List[TodoItem])
-def list_todos():
-    """
-    現在保存されている全てのTODOアイテムのリストを返します。
-    """
-    return list(todos.values())
+def get_db() -> Session:
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@app.get("/")
+def read_root():
+    return {"message": "Hello from Docker FastAPI + PostgreSQL"}
+
+
+@app.post("/items", response_model=ItemRead, status_code=status.HTTP_201_CREATED)
+def create_item(item_in: ItemCreate, db: Session = Depends(get_db)):
+    db_item = Item(**item_in.dict())
+    db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+
+@app.get("/items", response_model=List[ItemRead])
+def list_items(db: Session = Depends(get_db)):
+    return db.query(Item).all()
+
+
+@app.get("/items/{item_id}", response_model=ItemRead)
+def get_item(item_id: int, db: Session = Depends(get_db)):
+    item = db.query(Item).filter(Item.id == item_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return item
+
+
+@app.put("/items/{item_id}", response_model=ItemRead)
+def update_item(item_id: int, item_in: ItemCreate, db: Session = Depends(get_db)):
+    item = db.query(Item).filter(Item.id == item_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    for field, value in item_in.dict().items():
+        setattr(item, field, value)
+
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@app.delete("/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_item(item_id: int, db: Session = Depends(get_db)):
+    item = db.query(Item).filter(Item.id == item_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    db.delete(item)
+    db.commit()
+    # 204なので何も返さない
