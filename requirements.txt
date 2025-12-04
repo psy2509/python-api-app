@@ -1,8 +1,9 @@
-fastapi
-uvicorn[standard]
-sqlalchemy
-psycopg2-binary
-pydantic
-requests
 xarray
 cfgrib
+numpy
+pandas
+requests
+SQLAlchemy
+psycopg2-binary
+fastapi
+uvicorn
