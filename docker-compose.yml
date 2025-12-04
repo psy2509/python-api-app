@@ -45,17 +45,18 @@ services:
     restart: unless-stopped
 
 
-  # 将来Ingestを足したいとき用（最初はコメントアウトでもOK）
-  # ingest:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.ingest
-  #   container_name: weather-ingest
-  #   env_file:
-  #     - .env.dev
-  #   depends_on:
-  #     - db
-  #   command: ["python", "-m", "app.ingest.run_ingest"]
+  ingest:
+    build:
+      context: .
+      dockerfile: Dockerfile.ingest
+    container_name: weather-ingest
+    depends_on:
+      - db
+    working_dir: /app
+    volumes:
+      - ./app:/app
+    command: ["python", "-m", "ingest.run_ingest"]
+    # バッチなので常駐させない。基本は `docker compose run` で使う。
 
 volumes:
   db-data:

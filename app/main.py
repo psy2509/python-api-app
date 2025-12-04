@@ -8,6 +8,12 @@ from sqlalchemy.orm import Session
 from core.db import Base, engine, SessionLocal
 from models.item import Item
 from schemas.item import ItemCreate, ItemRead
+from models.weather import WeatherSample       
+from schemas.weather import WeatherSampleRead 
+
+from models.forecast import Forecast
+from schemas.forecast import ForecastRead
+
 
 
 Base.metadata.create_all(bind=engine)
@@ -73,3 +79,28 @@ def delete_item(item_id: int, db: Session = Depends(get_db)):
     db.delete(item)
     db.commit()
     # 204なので何も返さない
+
+@app.get("/weather-samples", response_model=List[WeatherSampleRead])
+def list_weather_samples(db: Session = Depends(get_db)):
+    """
+    weather_samples テーブルに入っている
+    気象サンプルデータを全部返すエンドポイント。
+
+    - Depends(get_db) で DB セッションを1つ受け取る
+    - db.query(WeatherSample).all() で全件取得
+    - そのリストを返すと、FastAPI が WeatherSampleRead のリストに変換して
+      JSON としてクライアントに返してくれる。
+    """
+    samples = db.query(WeatherSample).all()
+    return samples
+
+@app.get("/forecasts", response_model=List[ForecastRead])
+def list_forecasts(db: Session = Depends(get_db)):
+    """
+    Forecast テーブルに入っている予報データを全件返す。
+    実務では本当に全件返すと重すぎるので、
+    ページングや領域・時間フィルタを必ず入れる想定。
+    ここでは「全データJSON」を経験するための実装。
+    """
+    forecasts = db.query(Forecast).all()
+    return forecasts
